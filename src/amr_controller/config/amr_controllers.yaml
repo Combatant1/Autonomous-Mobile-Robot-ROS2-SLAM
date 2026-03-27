@@ -9,7 +9,7 @@ controller_manager:
     simple_velocity_controller:
       type: velocity_controllers/JointGroupVelocityController
 
-    test_controller:
+    amr_controller:
       type: diff_drive_controller/DiffDriveController
 
 
@@ -21,7 +21,7 @@ simple_velocity_controller:
       - rear_right_joint
       - rear_left_joint
 
-test_controller:
+amr_controller:
   ros__parameters:
     use_stamped_vel: true
     left_wheel_names: ['front_left_joint', 'rear_left_joint']

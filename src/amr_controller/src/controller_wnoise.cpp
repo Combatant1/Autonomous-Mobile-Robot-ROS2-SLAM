@@ -30,7 +30,7 @@ NoisyController::NoisyController(const std::string & node_name)
         "/joint_states", 10,
         std::bind(&NoisyController::jointCallback, this, std::placeholders::_1));
 
-    odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("/test_controller/odom_noisy", 10);
+    odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("/amr_controller/odom_noisy", 10);
 
     // Create the speed conversion matrix
 
