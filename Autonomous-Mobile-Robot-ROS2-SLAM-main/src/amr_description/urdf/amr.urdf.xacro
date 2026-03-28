@@ -1,0 +1,233 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="amr">
+
+    <xacro:arg name="is_ignition" default="true"/>
+
+    <xacro:include filename="$(find amr_description)/urdf/amr_gazebo.xacro"/>
+    <xacro:include filename="$(find amr_description)/urdf/amr_ros2_control.xacro"/>
+
+    <link name="base_footprint"/>
+
+    <link name="base_link">
+        <inertial>
+            <origin xyz="0.00594894007924615 6.8421702571426E-18 0.00960527415060363" rpy="0 0 0"/>
+            <mass value="0.421541524534237"/>
+            <inertia
+                ixx="0.000584551379875794"
+                ixy="-6.20744420269712E-11"
+                ixz="-8.68604635355335E-06"
+                iyy="0.0010081339864591"
+                iyz="-4.74470799360417E-21"
+                izz="0.00154132934361883"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/base_link.STL"/>
+            </geometry>
+            <material name="">
+                <color rgba="0.0 0.0 0.0 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/base_link.STL"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="base_joint" type="fixed">
+        <parent link="base_footprint"/>
+        <child link="base_link"/>
+        <origin rpy="0 0 0" xyz="0 0 0.078"/>
+    </joint>
+
+    <!-- Front Right Wheel -->
+    <link name="front_right_wheel">
+        <inertial>
+            <origin xyz="-1.3341E-06 -1.0793E-06 0.017227" rpy="0 0 0"/>
+            <mass value="0.071114"/>
+            <inertia
+                ixx="3.5289E-05"
+                ixy="2.3237E-11"
+                ixz="-1.1596E-10"
+                iyy="3.5289E-05"
+                iyz="-9.3849E-11"
+                izz="5.7238E-05"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/front_right_wheel.STL"/>
+            </geometry>
+            <material name="">
+                <color rgba="0.03 0.05 0.87 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius= "0.033"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="front_right_joint" type="continuous">
+        <origin xyz="0.087223 -0.1195 -0.039" rpy="-1.5708 0 0"/>
+        <parent link="base_link"/>
+        <child link="front_right_wheel"/>
+        <axis xyz="0 0 1"/>
+        <!-- <limit effort="3" velocity="11.5"/>
+        <dynamics damping="0.1" friction="0.1"/> -->
+    </joint>
+
+    <!-- Front Left Wheel -->
+    <link name="front_left_wheel">
+        <inertial>
+            <origin xyz="-5.3305E-07 -1.6311E-06 -0.017227" rpy="0 0 0"/>
+            <mass value="0.071114"/>
+            <inertia
+                ixx="3.5289E-05"
+                ixy="3.2764E-11"
+                ixz="4.6362E-11"
+                iyy="3.5289E-05"
+                iyz="1.418E-10"
+                izz="5.7238E-05"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/front_left_wheel.STL"/>
+            </geometry>
+            <material name="">
+                <color rgba="0.03 0.05 0.87 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius= "0.033"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="front_left_joint" type="continuous">
+        <origin xyz="0.087223 0.1195 -0.039" rpy="-1.5708 0 0"/>
+        <parent link="base_link"/>
+        <child link="front_left_wheel"/>
+        <axis xyz="0 0 1"/>
+        <!-- <limit effort="3" velocity="11.5"/>
+        <dynamics damping="0.1" friction="0.1"/> -->
+    </joint>
+
+    <!-- Rear Right Wheel -->
+    <link name="rear_right_wheel">
+        <inertial>
+            <origin xyz="-1.1461E-06 -1.2772E-06 0.017227" rpy="0 0 0"/>
+            <mass value="0.071114"/>
+            <inertia
+                ixx="3.5289E-05"
+                ixy="1.4815E-11"
+                ixz="-9.9618E-11"
+                iyy="3.5289E-05"
+                iyz="-1.1105E-10"
+                izz="5.7238E-05"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/rear_right_wheel.STL"/>
+            </geometry>
+            <material name="">
+                <color rgba="0.03 0.05 0.87 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius= "0.033"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="rear_right_joint" type="continuous">
+        <origin xyz="-0.082777 -0.1195 -0.039" rpy="-1.5708 0 0"/>
+        <parent link="base_link"/>
+        <child link="rear_right_wheel"/>
+        <axis xyz="0 0 1"/>
+        <!-- <limit effort="3" velocity="11.5"/>
+        <dynamics damping="0.1" friction="0.1"/> -->
+    </joint>
+
+    <!-- Rear Left Wheel -->
+    <link name="rear_left_wheel">
+        <inertial>
+            <origin xyz="-8.082E-07 -1.5138E-06 -0.017227" rpy="0 0 0"/>
+            <mass value="0.071114"/>
+            <inertia
+                ixx="3.5289E-05"
+                ixy="3.0169E-11"
+                ixz="7.028E-11"
+                iyy="3.5289E-05"
+                iyz="1.3159E-10"
+                izz="5.7238E-05"/>
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/rear_left_wheel.STL"/>
+            </geometry>
+            <material name="">
+                <color rgba="0.03 0.05 0.87 1"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <sphere radius= "0.033"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="rear_left_joint" type="continuous">
+        <origin xyz="-0.082777 0.1195 -0.039" rpy="-1.5708 0 0"/>
+        <parent link="base_link"/>
+        <child link="rear_left_wheel"/>
+        <axis xyz="0 0 1"/>
+        <!-- <limit effort="3" velocity="11.5"/>
+        <dynamics damping="0.1" friction="0.1"/> -->
+    </joint>
+
+    <link name="imu_link">
+        <inertial>
+            <origin xyz="-0.00552433659106688 0.000168210391520346 0.000514000497342681" rpy="0 0 0" />
+            <mass value="0.000528415362211671" />
+            <inertia ixx="1.46176048428261E-08" ixy="1.40015117949421E-10" ixz="-1.99633872937403E-12"
+                    iyy="8.59662482954888E-09" iyz="7.52375112767959E-12"
+                    izz="2.30279421279312E-08" />
+
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/imu_link.STL"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/imu_link.STL"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="imu_joint" type="fixed">
+        <origin xyz="0 0 0.0698986241758014" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="imu_link" />
+        <axis xyz="0 0 0" />
+    </joint>
+
+</robot>
