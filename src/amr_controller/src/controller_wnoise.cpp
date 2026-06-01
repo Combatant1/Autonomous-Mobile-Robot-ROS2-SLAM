@@ -2,8 +2,6 @@
 #include <Eigen/Geometry>
 #include <tf2/LinearMath/Quaternion.h>
 
-#include <random>
-
 NoisyController::NoisyController(const std::string & node_name)
     : Node(node_name)
     , front_left_wheel_prev_pos_(0.0)
@@ -13,8 +11,13 @@ NoisyController::NoisyController(const std::string & node_name)
     , x_(0.0)
     , y_(0.0)
     , theta_(0.0)
+    , noise_generator_(std::chrono::system_clock::now().time_since_epoch().count())
+    , front_left_encoder_noise_(0.0, 0.005)
+    , front_right_encoder_noise_(0.0, 0.005)
+    , rear_left_encoder_noise_(0.0, 0.005)
+    , rear_right_encoder_noise_(0.0, 0.005)
 {
-    declare_parameter("wheel_radius", 0.33);
+    declare_parameter("wheel_radius", 0.033);
     declare_parameter("wheel_separation", 0.239);
 
     wheel_radius_ = get_parameter("wheel_radius").as_double();
@@ -51,32 +54,42 @@ NoisyController::NoisyController(const std::string & node_name)
 
 void NoisyController::jointCallback(const sensor_msgs::msg::JointState & msg)
 {
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    std::default_random_engine noise_generator(seed);
-    std::normal_distribution<double> front_left_encoder_noise(0.0, 0.005);
-    std::normal_distribution<double> front_right_encoder_noise(0.0, 0.005);
-    double front_left_wheel_encoder = msg.position.at(1) + front_left_encoder_noise(noise_generator);
-    double front_right_wheel_encoder = msg.position.at(0) + front_right_encoder_noise(noise_generator);
-    double dp_front_left = front_left_wheel_encoder - front_left_wheel_prev_pos_;
+    // Noisy encoder readings (using persistent generator for true Gaussian stream)
+    double front_left_wheel_encoder  = msg.position.at(1) + front_left_encoder_noise_(noise_generator_);
+    double front_right_wheel_encoder = msg.position.at(0) + front_right_encoder_noise_(noise_generator_);
+    double rear_left_wheel_encoder   = msg.position.at(3) + rear_left_encoder_noise_(noise_generator_);
+    double rear_right_wheel_encoder  = msg.position.at(2) + rear_right_encoder_noise_(noise_generator_);
+
+    // Front wheel deltas (noisy)
+    double dp_front_left  = front_left_wheel_encoder  - front_left_wheel_prev_pos_;
     double dp_front_right = front_right_wheel_encoder - front_right_wheel_prev_pos_;
+
+    // Rear wheel deltas (noisy)
+    double dp_rear_left   = rear_left_wheel_encoder   - rear_left_wheel_prev_pos_;
+    double dp_rear_right  = rear_right_wheel_encoder  - rear_right_wheel_prev_pos_;
 
     rclcpp::Time msg_time = msg.header.stamp;
     rclcpp::Duration dt = msg_time - prev_time_;
 
-    front_left_wheel_prev_pos_ = msg.position.at(1);
+    // Store clean (unnoisy) positions as the previous reference
+    front_left_wheel_prev_pos_  = msg.position.at(1);
     front_right_wheel_prev_pos_ = msg.position.at(0);
-    rear_left_wheel_prev_pos_ = msg.position.at(3);
-    rear_right_wheel_prev_pos_ = msg.position.at(2);
+    rear_left_wheel_prev_pos_   = msg.position.at(3);
+    rear_right_wheel_prev_pos_  = msg.position.at(2);
     prev_time_ = msg_time;
 
-    double front_left_wheel_speed = dp_front_left / dt.seconds();
-    double front_right_wheel_speed = dp_front_right / dt.seconds();
+    // Average front and rear deltas per side for better odometry accuracy
+    double dp_left  = (dp_front_left  + dp_rear_left)  / 2.0;
+    double dp_right = (dp_front_right + dp_rear_right) / 2.0;
 
-    double linear_velocity = (wheel_radius_ * front_right_wheel_speed + wheel_radius_ * front_left_wheel_speed) / 2.0;
-    double angular_velocity = (wheel_radius_ * front_right_wheel_speed - wheel_radius_ * front_left_wheel_speed) / wheel_separation_;
+    double left_wheel_speed  = dp_left  / dt.seconds();
+    double right_wheel_speed = dp_right / dt.seconds();
 
-    double d_s = (wheel_radius_ * dp_front_right + wheel_radius_ * dp_front_left) / 2.0;
-    double d_theta = (wheel_radius_ * dp_front_right - wheel_radius_ * dp_front_left) / wheel_separation_;
+    double linear_velocity  = wheel_radius_ * (right_wheel_speed + left_wheel_speed) / 2.0;
+    double angular_velocity = wheel_radius_ * (right_wheel_speed - left_wheel_speed) / wheel_separation_;
+
+    double d_s     = wheel_radius_ * (dp_right + dp_left) / 2.0;
+    double d_theta = wheel_radius_ * (dp_right - dp_left) / wheel_separation_;
 
     theta_ += d_theta;
     x_ += d_s * std::cos(theta_);

@@ -11,7 +11,6 @@ def generate_launch_description():
     #     default_value="False",
     # )
 
-    use_python = LaunchConfiguration("use_python")
 
     static_transform_publisher = Node(
         package="tf2_ros",

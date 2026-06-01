@@ -1,6 +1,7 @@
 #ifndef NOISY_CONTROLLER_HPP
 #define NOISY_CONTROLLER_HPP
 
+#include <random>
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -34,6 +35,13 @@ private:
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> transform_broadcaster_;
     geometry_msgs::msg::TransformStamped transform_stamped_;
+
+    // Random noise members — initialized once, kept alive across callbacks
+    std::default_random_engine noise_generator_;
+    std::normal_distribution<double> front_left_encoder_noise_;
+    std::normal_distribution<double> front_right_encoder_noise_;
+    std::normal_distribution<double> rear_left_encoder_noise_;
+    std::normal_distribution<double> rear_right_encoder_noise_;
 };
 
 #endif

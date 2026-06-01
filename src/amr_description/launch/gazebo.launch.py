@@ -3,10 +3,11 @@ from launch_ros.actions import Node
 from pathlib import Path
 from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, IncludeLaunchDescription
 import os
+from os import pathsep
 from ament_index_python.packages import get_package_share_directory
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.parameter_descriptions import ParameterValue
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 
 def generate_launch_description():
     amr_description_dir = get_package_share_directory("amr_description")
@@ -18,6 +19,14 @@ def generate_launch_description():
         default_value=os.path.join(get_package_share_directory("amr_description"), "urdf", "amr.urdf.xacro"),
         description="path to robot URDF file"
     )
+
+    world_name_arg = DeclareLaunchArgument(name="world_name", default_value="warehouse_world.sdf", description="Name of the world to load in Gazebo")
+
+    world_path = PathJoinSubstitution([
+        amr_description_dir,
+        "worlds",
+        LaunchConfiguration("world_name")
+    ])
 
     robot_description = ParameterValue(Command([
         "xacro ",
@@ -33,21 +42,20 @@ def generate_launch_description():
         parameters=[{"robot_description": robot_description}]
     )
 
+    model_path = str(Path(amr_description_dir).parent.resolve())
+    model_path += pathsep + os.path.join(amr_description_dir, "models")
+
     gazebo_resource_path = SetEnvironmentVariable(
-        name="GZ_SIM_RESOURCE_PATH",
-        value=[
-            str(Path(amr_description_dir).parent.resolve())
-        ]
+        "GZ_SIM_RESOURCE_PATH", model_path
     )
 
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory("ros_gz_sim"), "launch"), "/gz_sim.launch.py"]),
-            launch_arguments=[
-                ("gz_args", [" -v 4", " -r", " empty.sdf"])
-            ]
+            launch_arguments={
+                "gz_args": [world_path, " -v 4 -r"]
+            }.items()
     )
-
     gz_spawn_entity = Node(
         package="ros_gz_sim",
         executable="create",
@@ -69,6 +77,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         model_arg,
+        world_name_arg,
         robot_state_publisher,
         gazebo_resource_path,
         gazebo,

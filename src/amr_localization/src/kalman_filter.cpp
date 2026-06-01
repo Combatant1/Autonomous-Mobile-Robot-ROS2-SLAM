@@ -15,7 +15,7 @@ KalmanFilter::KalmanFilter(const std::string& name)
                       measurement_variance_(0.5)
 {
   odom_sub_ = create_subscription<nav_msgs::msg::Odometry>("amr_controller/odom_noisy", 10, std::bind(&KalmanFilter::odomCallback, this, _1));
-  imu_sub_ = create_subscription<sensor_msgs::msg::Imu>("imu/out", 1000, std::bind(&KalmanFilter::imuCallback, this, _1));
+  imu_sub_ = create_subscription<sensor_msgs::msg::Imu>("imu/out", 10, std::bind(&KalmanFilter::imuCallback, this, _1));
   odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("amr_controller/odom_kalman", 10);
 }
 
