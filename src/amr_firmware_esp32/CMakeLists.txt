@@ -68,6 +68,11 @@ install(TARGETS
     DESTINATION share/${PROJECT_NAME}
   )
 
+  install(PROGRAMS
+    ${PROJECT_NAME}/mpu6050_driver.py
+    DESTINATION lib/${PROJECT_NAME}
+  )
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
 
