@@ -4,7 +4,7 @@
 
     <ros2_control name="RobotSystem" type="system">
 
-        <xacro:if value="$arg is_sim">
+        <xacro:if value="$(arg is_sim)">
             <xacro:if value="$(arg is_ignition)">
             <hardware>
                 <plugin>ign_ros2_control/IgnitionSystem</plugin>
@@ -17,7 +17,7 @@
                 </hardware>
             </xacro:unless>
         </xacro:if>
-        <xacro:unless>
+        <xacro:unless value="$(arg is_sim)">
             <hardware>
                 <plugin>amr_firmware_esp32/AmrInterface</plugin>
                 <param name="port">/dev/ttyUSB0</param>
