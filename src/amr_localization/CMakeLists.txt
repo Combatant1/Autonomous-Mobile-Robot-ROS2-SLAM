@@ -14,6 +14,8 @@ if(BUILD_TESTING)
   find_package(rclcpp REQUIRED)
   find_package(nav_msgs REQUIRED)
   find_package(sensor_msgs REQUIRED)
+  find_package(tf2 REQUIRED)
+  find_package(geometry_msgs REQUIRED)
 
   include_directories(include)
 
@@ -23,6 +25,9 @@ if(BUILD_TESTING)
   add_executable(imu_republisher src/imu_republisher.cpp)
   ament_target_dependencies(imu_republisher rclcpp nav_msgs sensor_msgs)
 
+  add_executable(odometry_motion src/odometry_motion_model.cpp)
+  ament_target_dependencies(odometry_motion rclcpp nav_msgs tf2 geometry_msgs)
+
   install(
     DIRECTORY include
     DESTINATION lib/$(PROJECT_NAME)
@@ -31,6 +36,7 @@ if(BUILD_TESTING)
   install(TARGETS
     kalman_filter
     imu_republisher
+    odometry_motion
     DESTINATION lib/${PROJECT_NAME}
   )
 
