@@ -9,6 +9,7 @@
 
 #include <vector>
 #include <string>
+#include <array>
 
 
 namespace amr_firmware
@@ -40,6 +41,15 @@ private:
   std::vector<double> position_states_;
   std::vector<double> velocity_states_;
   rclcpp::Time last_run_;
+
+  // The ESP32 firmware drives/senses 4 independent wheels and identifies
+  // them on the wire with a numeric id '1'-'4' (see robot_control.ino):
+  // 1 = front_right   2 = front_left   3 = rear_right   4 = rear_left
+  // wheel_idx_[id-1] gives the index into the *_states_/*_commands_ vectors
+  // for that wheel, resolved by joint name in on_init() rather than assumed
+  // from URDF declaration order.
+  static constexpr int kNumWheels = 4;
+  std::array<int, kNumWheels> wheel_idx_{-1, -1, -1, -1};
 };
 }  // namespace amr_firmware
 
