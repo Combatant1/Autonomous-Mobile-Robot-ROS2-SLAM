@@ -1,6 +1,7 @@
 #include "amr_interface.hpp"
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <pluginlib/class_list_macros.hpp>
+#include <algorithm>
 
 
 namespace amr_firmware
@@ -45,10 +46,42 @@ CallbackReturn AmrInterface::on_init(const hardware_interface::HardwareInfo &har
     return CallbackReturn::FAILURE;
   }
 
-  velocity_commands_.reserve(info_.joints.size());
-  position_states_.reserve(info_.joints.size());
-  velocity_states_.reserve(info_.joints.size());
+  // reserve() only sets capacity, not size - using .at(i)/[i] afterwards on
+  // an empty vector is undefined behaviour. resize() actually allocates
+  // info_.joints.size() zero-initialized elements.
+  velocity_commands_.resize(info_.joints.size(), 0.0);
+  position_states_.resize(info_.joints.size(), 0.0);
+  velocity_states_.resize(info_.joints.size(), 0.0);
   last_run_ = rclcpp::Clock().now();
+
+  // Resolve which vector index corresponds to which physical wheel by name,
+  // rather than assuming a fixed position. Order here matches the numeric
+  // wheel id used by the firmware serial protocol (see robot_control.ino):
+  //   id '1' = front_right, '2' = front_left, '3' = rear_right, '4' = rear_left
+  static constexpr std::array<const char *, kNumWheels> kWheelJointNames{
+      "front_right_joint", "front_left_joint", "rear_right_joint", "rear_left_joint"};
+
+  for (size_t i = 0; i < info_.joints.size(); i++)
+  {
+    for (int w = 0; w < kNumWheels; w++)
+    {
+      if (info_.joints[i].name == kWheelJointNames[w])
+      {
+        wheel_idx_[w] = static_cast<int>(i);
+      }
+    }
+  }
+
+  for (int w = 0; w < kNumWheels; w++)
+  {
+    if (wheel_idx_[w] < 0)
+    {
+      RCLCPP_FATAL(rclcpp::get_logger("AmrInterface"),
+                   "Expected joint '%s' in ros2_control config - check amr_ros2_control.xacro",
+                   kWheelJointNames[w]);
+      return CallbackReturn::FAILURE;
+    }
+  }
 
   return CallbackReturn::SUCCESS;
 }
@@ -90,10 +123,10 @@ CallbackReturn AmrInterface::on_activate(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(rclcpp::get_logger("AmrInterface"), "Starting robot hardware ...");
 
-  // Reset commands and states
-  velocity_commands_ = { 0.0, 0.0 };
-  position_states_ = { 0.0, 0.0 };
-  velocity_states_ = { 0.0, 0.0 };
+  // Reset commands and states (sized to the actual joint count from on_init)
+  std::fill(velocity_commands_.begin(), velocity_commands_.end(), 0.0);
+  std::fill(position_states_.begin(), position_states_.end(), 0.0);
+  std::fill(velocity_states_.begin(), velocity_states_.end(), 0.0);
 
   try
   {
@@ -138,7 +171,9 @@ CallbackReturn AmrInterface::on_deactivate(const rclcpp_lifecycle::State &)
 hardware_interface::return_type AmrInterface::read(const rclcpp::Time &,
                                                           const rclcpp::Duration &)
 {
-  // Interpret the string
+  // Interpret the string. Firmware sends one token per wheel, each shaped
+  // "<id><sign><value>", where id is '1'-'4' (see robot_control.ino for the
+  // front_right/front_left/rear_right/rear_left ordering) and sign is 'p'/'n'.
   if(esp_.IsDataAvailable())
   {
     auto dt = (rclcpp::Clock().now() - last_run_).seconds();
@@ -146,21 +181,25 @@ hardware_interface::return_type AmrInterface::read(const rclcpp::Time &,
     esp_.ReadLine(message);
     std::stringstream ss(message);
     std::string res;
-    int multiplier = 1;
     while(std::getline(ss, res, ','))
     {
-      multiplier = res.at(1) == 'p' ? 1 : -1;
+      if (res.size() < 3)
+      {
+        continue;  // malformed/short token, skip rather than throw
+      }
 
-      if(res.at(0) == 'r')
+      char id_char = res.at(0);
+      if (id_char < '1' || id_char > '4')
       {
-        velocity_states_.at(0) = multiplier * std::stod(res.substr(2, res.size()));
-        position_states_.at(0) += velocity_states_.at(0) * dt;
+        continue;  // unknown wheel id, ignore
       }
-      else if(res.at(0) == 'l')
-      {
-        velocity_states_.at(1) = multiplier * std::stod(res.substr(2, res.size()));
-        position_states_.at(1) += velocity_states_.at(1) * dt;
-      }
+
+      int wheel = id_char - '1';
+      int state_idx = wheel_idx_[wheel];
+      int multiplier = res.at(1) == 'p' ? 1 : -1;
+
+      velocity_states_.at(state_idx) = multiplier * std::stod(res.substr(2, res.size()));
+      position_states_.at(state_idx) += velocity_states_.at(state_idx) * dt;
     }
     last_run_ = rclcpp::Clock().now();
   }
@@ -171,32 +210,20 @@ hardware_interface::return_type AmrInterface::read(const rclcpp::Time &,
 hardware_interface::return_type AmrInterface::write(const rclcpp::Time &,
                                                           const rclcpp::Duration &)
 {
-  // Implement communication protocol with the Arduino
+  // Implement communication protocol with the ESP32: one token per wheel,
+  // "<id><sign><value>," with id '1'-'4' in front_right/front_left/
+  // rear_right/rear_left order (matching the firmware).
   std::stringstream message_stream;
-  char right_wheel_sign = velocity_commands_.at(0) >= 0 ? 'p' : 'n';
-  char left_wheel_sign = velocity_commands_.at(1) >= 0 ? 'p' : 'n';
-  std::string compensate_zeros_right = "";
-  std::string compensate_zeros_left = "";
-  if(std::abs(velocity_commands_.at(0)) < 10.0)
+  message_stream << std::fixed << std::setprecision(2);
+
+  for (int wheel = 0; wheel < kNumWheels; wheel++)
   {
-    compensate_zeros_right = "0";
+    double cmd = velocity_commands_.at(wheel_idx_[wheel]);
+    char sign = cmd >= 0 ? 'p' : 'n';
+    std::string leading_zero = std::abs(cmd) < 10.0 ? "0" : "";
+
+    message_stream << (wheel + 1) << sign << leading_zero << std::abs(cmd) << ",";
   }
-  else
-  {
-    compensate_zeros_right = "";
-  }
-  if(std::abs(velocity_commands_.at(1)) < 10.0)
-  {
-    compensate_zeros_left = "0";
-  }
-  else
-  {
-    compensate_zeros_left = "";
-  }
-  
-  message_stream << std::fixed << std::setprecision(2) << 
-    "r" << right_wheel_sign << compensate_zeros_right << std::abs(velocity_commands_.at(0)) << 
-    ",l" <<  left_wheel_sign << compensate_zeros_left << std::abs(velocity_commands_.at(1)) << ",";
 
   try
   {
