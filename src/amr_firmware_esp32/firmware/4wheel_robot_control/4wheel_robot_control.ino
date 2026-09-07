@@ -1,44 +1,46 @@
 #include <PID_v1.h>
 
 /*
- * 4 independently driven/sensed wheels, one L298N per axle (rear board
- * already wired; front board added for the front wheels).
+ * 4 independently driven/sensed wheels, one L298N per side:
+ *   L298N #1 (left board):  channel A -> front-left, channel B -> rear-left
+ *   L298N #2 (right board): channel A -> front-right, channel B -> rear-right
  *
  * Wheel indices used throughout (and in the serial protocol) match the
  * ros2_control joint order in amr_ros2_control.xacro:
  *   1 = front_right   2 = front_left   3 = rear_right   4 = rear_left
  *
- * Rear pins are unchanged from the 2-wheel version. Front pins use GPIOs
- * that are free on this board: GPIO21/22 are free because the MPU6050 is
- * read over I2C from the companion computer, not the ESP32. None of the
- * new pins are UART0 (1/3), SPI flash (6-11), or strapping pins (0/2/5/15).
+ * GPIO21/22 are free for use because the MPU6050 is read over I2C from the
+ * companion computer, not the ESP32. None of these pins are UART0 (1/3) or
+ * SPI flash (6-11). GPIO12 (front-left IN2) is a strapping pin - this was
+ * already the case in the original 2-wheel wiring (rear-left dir B), so
+ * it's a carried-over, previously-working configuration, not new risk.
  */
 
-// ---- L298N #1 (rear) ----
-#define L298N_R_enA 25  // PWM  rear-right
-#define L298N_R_enB 13  // PWM  rear-left
-#define L298N_R_in1 26  // dir  rear-right A
-#define L298N_R_in2 27  // dir  rear-right B
-#define L298N_R_in3 14  // dir  rear-left A
-#define L298N_R_in4 12  // dir  rear-left B
+// ---- L298N #1 (left board) ----
+#define L298N_L_enA 4    // PWM  front-left
+#define L298N_L_in1 14   // dir  front-left A
+#define L298N_L_in2 12   // dir  front-left B
+#define L298N_L_enB 23   // PWM  rear-left
+#define L298N_L_in3 18   // dir  rear-left A
+#define L298N_L_in4 19   // dir  rear-left B
 
-// ---- L298N #2 (front) ----
-#define L298N_F_enA 4   // PWM  front-right
-#define L298N_F_enB 23  // PWM  front-left
-#define L298N_F_in1 16  // dir  front-right A
-#define L298N_F_in2 17  // dir  front-right B
-#define L298N_F_in3 18  // dir  front-left A
-#define L298N_F_in4 19  // dir  front-left B
+// ---- L298N #2 (right board) ----
+#define L298N_R_enA 13   // PWM  front-right
+#define L298N_R_in1 17   // dir  front-right A
+#define L298N_R_in2 16   // dir  front-right B
+#define L298N_R_enB 25   // PWM  rear-right
+#define L298N_R_in3 26   // dir  rear-right A
+#define L298N_R_in4 27   // dir  rear-right B
 
 // ---- Encoders ----
-#define front_right_encoder_phaseA 36  // input-only
-#define front_right_encoder_phaseB 39  // input-only
 #define front_left_encoder_phaseA  21
 #define front_left_encoder_phaseB  22
-#define rear_right_encoder_phaseA  32
-#define rear_right_encoder_phaseB  33
-#define rear_left_encoder_phaseA   34  // input-only
-#define rear_left_encoder_phaseB   35  // input-only
+#define rear_left_encoder_phaseA   32
+#define rear_left_encoder_phaseB   33
+#define front_right_encoder_phaseA 36  // input-only
+#define front_right_encoder_phaseB 39  // input-only
+#define rear_right_encoder_phaseA  34  // input-only
+#define rear_right_encoder_phaseB  35  // input-only
 
 // Wheel array indices, matching the serial protocol id ('1'-'4') and the
 // ros2_control joint order.
@@ -47,6 +49,7 @@ enum WheelIdx { FRONT_RIGHT = 0, FRONT_LEFT = 1, REAR_RIGHT = 2, REAR_LEFT = 3, 
 // Encoders (marked volatile for ISR safety)
 volatile unsigned long encoder_counter[NUM_WHEELS] = {0, 0, 0, 0};
 volatile char wheel_sign[NUM_WHEELS] = {'p', 'p', 'p', 'p'};
+
 
 unsigned long last_millis = 0;
 const unsigned long interval = 100;
@@ -91,6 +94,13 @@ void setup() {
   Serial.begin(115200);
 
   // Init L298N Pins
+  pinMode(L298N_L_enA, OUTPUT);
+  pinMode(L298N_L_enB, OUTPUT);
+  pinMode(L298N_L_in1, OUTPUT);
+  pinMode(L298N_L_in2, OUTPUT);
+  pinMode(L298N_L_in3, OUTPUT);
+  pinMode(L298N_L_in4, OUTPUT);
+
   pinMode(L298N_R_enA, OUTPUT);
   pinMode(L298N_R_enB, OUTPUT);
   pinMode(L298N_R_in1, OUTPUT);
@@ -98,22 +108,15 @@ void setup() {
   pinMode(L298N_R_in3, OUTPUT);
   pinMode(L298N_R_in4, OUTPUT);
 
-  pinMode(L298N_F_enA, OUTPUT);
-  pinMode(L298N_F_enB, OUTPUT);
-  pinMode(L298N_F_in1, OUTPUT);
-  pinMode(L298N_F_in2, OUTPUT);
-  pinMode(L298N_F_in3, OUTPUT);
-  pinMode(L298N_F_in4, OUTPUT);
-
   // Default Forward Direction Setup
-  digitalWrite(L298N_R_in1, HIGH);
+  digitalWrite(L298N_L_in1, HIGH);  // front-left
+  digitalWrite(L298N_L_in2, LOW);
+  digitalWrite(L298N_L_in3, HIGH);  // rear-left
+  digitalWrite(L298N_L_in4, LOW);
+  digitalWrite(L298N_R_in1, HIGH);  // front-right
   digitalWrite(L298N_R_in2, LOW);
-  digitalWrite(L298N_R_in3, HIGH);
+  digitalWrite(L298N_R_in3, HIGH);  // rear-right
   digitalWrite(L298N_R_in4, LOW);
-  digitalWrite(L298N_F_in1, HIGH);
-  digitalWrite(L298N_F_in2, LOW);
-  digitalWrite(L298N_F_in3, HIGH);
-  digitalWrite(L298N_F_in4, LOW);
 
   // Init PID
   frontRightMotor.SetMode(AUTOMATIC);
@@ -216,10 +219,10 @@ void loop() {
     }
     Serial.println();
 
-    analogWrite(L298N_F_enA, (int)wheel_cmd[FRONT_RIGHT]);
-    analogWrite(L298N_F_enB, (int)wheel_cmd[FRONT_LEFT]);
-    analogWrite(L298N_R_enA, (int)wheel_cmd[REAR_RIGHT]);
-    analogWrite(L298N_R_enB, (int)wheel_cmd[REAR_LEFT]);
+    analogWrite(L298N_R_enA, (int)wheel_cmd[FRONT_RIGHT]);  // front-right PWM
+    analogWrite(L298N_L_enA, (int)wheel_cmd[FRONT_LEFT]);   // front-left PWM
+    analogWrite(L298N_R_enB, (int)wheel_cmd[REAR_RIGHT]);   // rear-right PWM
+    analogWrite(L298N_L_enB, (int)wheel_cmd[REAR_LEFT]);    // rear-left PWM
   }
 }
 
@@ -227,23 +230,24 @@ void loop() {
 void setDirection(int wheel, bool forward) {
   switch (wheel) {
     case FRONT_RIGHT:
-      digitalWrite(L298N_F_in1, forward ? HIGH : LOW);
-      digitalWrite(L298N_F_in2, forward ? LOW : HIGH);
-      break;
-    case FRONT_LEFT:
-      digitalWrite(L298N_F_in3, forward ? HIGH : LOW);
-      digitalWrite(L298N_F_in4, forward ? LOW : HIGH);
-      break;
-    case REAR_RIGHT:
       digitalWrite(L298N_R_in1, forward ? HIGH : LOW);
       digitalWrite(L298N_R_in2, forward ? LOW : HIGH);
       break;
-    case REAR_LEFT:
+    case FRONT_LEFT:
+      digitalWrite(L298N_L_in1, forward ? HIGH : LOW);
+      digitalWrite(L298N_L_in2, forward ? LOW : HIGH);
+      break;
+    case REAR_RIGHT:
       digitalWrite(L298N_R_in3, forward ? HIGH : LOW);
       digitalWrite(L298N_R_in4, forward ? LOW : HIGH);
       break;
+    case REAR_LEFT:
+      digitalWrite(L298N_L_in3, forward ? HIGH : LOW);
+      digitalWrite(L298N_L_in4, forward ? LOW : HIGH);
+      break;
   }
 }
+
 
 // --- INTERRUPT SERVICE ROUTINES ---
 void IRAM_ATTR frontRightEncoderCallback() {
