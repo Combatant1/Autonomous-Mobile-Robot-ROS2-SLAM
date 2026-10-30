@@ -1,5 +1,5 @@
-<library path="amr_firmware">
-    <class name="amr_firmware/AmrInterface"
+<library path="amr_firmware_esp32">
+    <class name="amr_firmware_esp32/AmrInterface"
       type="amr_firmware::AmrInterface"
       base_class_type="hardware_interface::SystemInterface"
     >

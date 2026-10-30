@@ -8,7 +8,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     hardware_interface = IncludeLaunchDescription(
         os.path.join(
-            get_package_share_directory("amr_firmware"),
+            get_package_share_directory("amr_firmware_esp32"),
             "launch",
             "hardware_interface.launch.py"
         ),
@@ -30,7 +30,7 @@ def generate_launch_description():
         os.path.join(
             get_package_share_directory("amr_controller"),
             "launch",
-            "joystick_teleop.launch.py"
+            "joystick.launch.py"
         ),
         launch_arguments={
             "use_sim_time": "False"
@@ -38,7 +38,7 @@ def generate_launch_description():
     )
 
     imu_driver_node = Node(
-        package="amr_firmware",
+        package="amr_firmware_esp32",
         executable="mpu6050_driver.py"
     )
     

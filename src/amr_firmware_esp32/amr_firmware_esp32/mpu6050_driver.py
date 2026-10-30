@@ -26,6 +26,7 @@ class MPU6050_Driver(Node):
         super().__init__("mpu6050_driver")
         
         # I2C Interafce
+        self.bus_ = None
         self.is_connected_ = False
         self.init_i2c()
 
@@ -40,6 +41,9 @@ class MPU6050_Driver(Node):
         try:
             if not self.is_connected_:
                 self.init_i2c()
+            
+            if not self.is_connected_:
+                return
             
             # Read Accelerometer raw value
             acc_x = self.read_raw_data(ACCEL_XOUT_H)
