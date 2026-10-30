@@ -2,6 +2,10 @@
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <pluginlib/class_list_macros.hpp>
 #include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
+#include <string>
 
 
 namespace amr_firmware
@@ -127,6 +131,7 @@ CallbackReturn AmrInterface::on_activate(const rclcpp_lifecycle::State &)
   std::fill(velocity_commands_.begin(), velocity_commands_.end(), 0.0);
   std::fill(position_states_.begin(), position_states_.end(), 0.0);
   std::fill(velocity_states_.begin(), velocity_states_.end(), 0.0);
+  last_run_ = rclcpp::Clock().now();  // otherwise the first dt spans on_init -> activate
 
   try
   {
@@ -154,6 +159,9 @@ CallbackReturn AmrInterface::on_deactivate(const rclcpp_lifecycle::State &)
   {
     try
     {
+      // Tell the firmware to stop before we disappear (its watchdog would also catch this)
+      esp_.Write("1p00.00,2p00.00,3p00.00,4p00.00,");
+      esp_.DrainWriteBuffer();
       esp_.Close();
     }
     catch (...)
@@ -171,38 +179,87 @@ CallbackReturn AmrInterface::on_deactivate(const rclcpp_lifecycle::State &)
 hardware_interface::return_type AmrInterface::read(const rclcpp::Time &,
                                                           const rclcpp::Duration &)
 {
-  // Interpret the string. Firmware sends one token per wheel, each shaped
-  // "<id><sign><value>", where id is '1'-'4' (see robot_control.ino for the
-  // front_right/front_left/rear_right/rear_left ordering) and sign is 'p'/'n'.
-  if(esp_.IsDataAvailable())
+  if (!esp_.IsOpen())
   {
-    auto dt = (rclcpp::Clock().now() - last_run_).seconds();
-    std::string message;
-    esp_.ReadLine(message);
-    std::stringstream ss(message);
-    std::string res;
-    while(std::getline(ss, res, ','))
-    {
-      if (res.size() < 3)
-      {
-        continue;  // malformed/short token, skip rather than throw
-      }
-
-      char id_char = res.at(0);
-      if (id_char < '1' || id_char > '4')
-      {
-        continue;  // unknown wheel id, ignore
-      }
-
-      int wheel = id_char - '1';
-      int state_idx = wheel_idx_[wheel];
-      int multiplier = res.at(1) == 'p' ? 1 : -1;
-
-      velocity_states_.at(state_idx) = multiplier * std::stod(res.substr(2, res.size()));
-      position_states_.at(state_idx) += velocity_states_.at(state_idx) * dt;
-    }
-    last_run_ = rclcpp::Clock().now();
+    return hardware_interface::return_type::ERROR;
   }
+
+  // Never block the control loop waiting for a line that is only half-received.
+  constexpr size_t kReadTimeoutMs = 5;
+
+  // Drain everything that has arrived and keep only the newest complete line, so a
+  // backlog can never turn into stale velocity data.
+  std::string message;
+  bool have_line = false;
+  while (esp_.IsDataAvailable())
+  {
+    std::string line;
+    try
+    {
+      esp_.ReadLine(line, '\n', kReadTimeoutMs);
+    }
+    catch (const LibSerial::ReadTimeout &)
+    {
+      break;  // partial line: drop the fragment and try again next cycle
+    }
+    catch (const std::exception &e)
+    {
+      static rclcpp::Clock steady_clock(RCL_STEADY_TIME);
+      RCLCPP_ERROR_STREAM_THROTTLE(rclcpp::get_logger("AmrInterface"), steady_clock, 2000,
+                                   "Serial read failed on " << port_ << ": " << e.what());
+      return hardware_interface::return_type::ERROR;
+    }
+    message = line;
+    have_line = true;
+  }
+
+  if (!have_line)
+  {
+    return hardware_interface::return_type::OK;
+  }
+
+  // Firmware sends one token per wheel, each shaped "<id><sign><value>", where id is
+  // '1'-'4' (front_right/front_left/rear_right/rear_left) and sign is 'p'/'n'.
+  const rclcpp::Time now = rclcpp::Clock().now();
+  const double dt = (now - last_run_).seconds();
+
+  std::stringstream ss(message);
+  std::string res;
+  while (std::getline(ss, res, ','))
+  {
+    if (res.size() < 3)
+    {
+      continue;  // malformed/short token (also the trailing "\r\n"), skip
+    }
+
+    const char id_char = res.at(0);
+    if (id_char < '1' || id_char > '4')
+    {
+      continue;  // unknown wheel id, ignore
+    }
+
+    double value = 0.0;
+    try
+    {
+      value = std::stod(res.substr(2));
+    }
+    catch (const std::exception &)
+    {
+      continue;  // garbage such as "ovf": an uncaught throw here would kill ros2_control_node
+    }
+    if (!std::isfinite(value))
+    {
+      continue;
+    }
+
+    const int state_idx = wheel_idx_[id_char - '1'];
+    const int multiplier = res.at(1) == 'p' ? 1 : -1;
+
+    velocity_states_.at(state_idx) = multiplier * value;
+    position_states_.at(state_idx) += velocity_states_.at(state_idx) * dt;
+  }
+  last_run_ = now;
+
   return hardware_interface::return_type::OK;
 }
 
@@ -213,12 +270,25 @@ hardware_interface::return_type AmrInterface::write(const rclcpp::Time &,
   // Implement communication protocol with the ESP32: one token per wheel,
   // "<id><sign><value>," with id '1'-'4' in front_right/front_left/
   // rear_right/rear_left order (matching the firmware).
+  if (!esp_.IsOpen())
+  {
+    return hardware_interface::return_type::ERROR;
+  }
+
+  // The wire format is "NN.NN" (rad/s), so magnitudes above 99.99 cannot be encoded.
+  constexpr double kMaxWheelCmd = 99.99;
+
   std::stringstream message_stream;
   message_stream << std::fixed << std::setprecision(2);
 
   for (int wheel = 0; wheel < kNumWheels; wheel++)
   {
     double cmd = velocity_commands_.at(wheel_idx_[wheel]);
+    if (!std::isfinite(cmd))
+    {
+      cmd = 0.0;  // never forward NaN/inf to the motors
+    }
+    cmd = std::max(-kMaxWheelCmd, std::min(kMaxWheelCmd, cmd));
     char sign = cmd >= 0 ? 'p' : 'n';
     std::string leading_zero = std::abs(cmd) < 10.0 ? "0" : "";
 

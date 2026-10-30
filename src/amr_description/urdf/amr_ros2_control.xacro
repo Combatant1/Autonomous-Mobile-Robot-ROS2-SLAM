@@ -2,6 +2,9 @@
 
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="amr">
 
+    <!-- Serial port of the ESP32 (real robot only). Override with: xacro ... port:=/dev/ttyACM0 -->
+    <xacro:arg name="port" default="/dev/ttyUSB0"/>
+
     <ros2_control name="RobotSystem" type="system">
 
         <xacro:if value="$(arg is_sim)">
@@ -20,7 +23,7 @@
         <xacro:unless value="$(arg is_sim)">
             <hardware>
                 <plugin>amr_firmware_esp32/AmrInterface</plugin>
-                <param name="port">/dev/ttyUSB0</param>
+                <param name="port">$(arg port)</param>
             </hardware>
         </xacro:unless>
         

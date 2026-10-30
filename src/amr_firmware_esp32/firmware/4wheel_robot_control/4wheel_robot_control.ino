@@ -54,6 +54,11 @@ volatile char wheel_sign[NUM_WHEELS] = {'p', 'p', 'p', 'p'};
 unsigned long last_millis = 0;
 const unsigned long interval = 100;
 
+// Safety watchdog: if no complete command arrives for this long (ROS crashed, cable
+// unplugged, ...), all wheel setpoints are forced to zero so the robot stops.
+const unsigned long CMD_TIMEOUT_MS = 500;
+unsigned long last_cmd_ms = 0;
+
 // --- Serial command parser state ---
 int cmd_wheel_idx = -1;          // which wheel the current command targets, -1 = none
 bool is_wheel_forward[NUM_WHEELS] = {true, true, true, true};
@@ -170,6 +175,7 @@ void loop() {
       value[value_idx] = '\0';
       if (cmd_wheel_idx >= 0) {
         wheel_cmd_vel[cmd_wheel_idx] = atof(value);
+        last_cmd_ms = millis();
       }
       value_idx = 0;
       memset(value, 0, sizeof(value));
@@ -196,9 +202,15 @@ void loop() {
     }
     interrupts();
 
-    // Velocity calculation: rad/s = (ticks in 100ms * 10) * (60 / 385 RPM) * 0.10472
+    // Velocity calculation: 385 = encoder ticks per wheel revolution.
+    // rad/s = (ticks in 100 ms * 10) / 385 [rev/s] * 60 [rpm] * 0.10472 [rad/s per rpm]
     for (int i = 0; i < NUM_WHEELS; i++) {
       wheel_meas_vel[i] = (10.0 * ticks[i] * (60.0 / 385.0)) * 0.10472;
+    }
+
+    // Watchdog: stop if the host went silent
+    if (current_millis - last_cmd_ms > CMD_TIMEOUT_MS) {
+      for (int i = 0; i < NUM_WHEELS; i++) wheel_cmd_vel[i] = 0.0;
     }
 
     frontRightMotor.Compute();
