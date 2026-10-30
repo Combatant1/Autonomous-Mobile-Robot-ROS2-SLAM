@@ -3,11 +3,17 @@
 <package format="3">
   <name>amr_launch</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Top-level launch files (simulation and real robot) for the 4-wheel AMR</description>
   <maintainer email="absalomgranton7911@gmail.com">granton</maintainer>
-  <license>Apche-2.0</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>amr_description</exec_depend>
+  <exec_depend>amr_controller</exec_depend>
+  <exec_depend>amr_localization</exec_depend>
+  <exec_depend>amr_firmware_esp32</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

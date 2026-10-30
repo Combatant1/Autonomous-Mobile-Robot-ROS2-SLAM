@@ -3,11 +3,17 @@
 <package format="3">
   <name>amr_controller</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Wheel controllers, joystick teleop and optional noisy-odometry node for the 4-wheel AMR</description>
   <maintainer email="absalomgranton7911@gmail.com">granton</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>joy</exec_depend>
+  <exec_depend>joy_teleop</exec_depend>
+  <exec_depend>diff_drive_controller</exec_depend>
+  <exec_depend>velocity_controllers</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
 
   <exec_depend>ros2launch</exec_depend>
   <exec_depend>controller_manager</exec_depend>

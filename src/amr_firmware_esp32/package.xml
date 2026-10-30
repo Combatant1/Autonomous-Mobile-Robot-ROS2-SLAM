@@ -3,11 +3,21 @@
 <package format="3">
   <name>amr_firmware_esp32</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>ros2_control hardware interface (serial) and MPU6050 IMU driver for the AMR's ESP32 motor controller</description>
   <maintainer email="absalomgranton7911@gmail.com">granton</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>python3-smbus</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>amr_description</exec_depend>
+  <exec_depend>amr_controller</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>

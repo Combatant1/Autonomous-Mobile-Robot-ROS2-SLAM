@@ -34,12 +34,16 @@ amr_controller:
     wheel_separation: 0.239
     left_wheel_radius_multiplier: 1.0
     right_wheel_radius_multiplier: 1.0
+    # Skid-steer wheels slip when turning, so the effective track is wider than the geometric
+    # one: expect a value > 1.0. CALIBRATE on the real robot (see README, 'Calibration').
     wheel_separation_multiplier: 1.0
 
     cmd_vel_timeout: 0.25
     base_frame_id: base_footprint
     publish_limited_velocity: true
     publish_wheel_data: true
+    # true = this controller owns odom->base_footprint. If you later let the EKF publish it
+    # (local_localization.launch.py ekf_publishes_tf:=true) set this to false - never both.
     enable_odom_tf: true
 
     linear:
