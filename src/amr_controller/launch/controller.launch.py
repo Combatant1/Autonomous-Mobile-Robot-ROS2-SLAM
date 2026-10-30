@@ -109,9 +109,9 @@ def generate_launch_description():
         ]
     )
 
-    noisy_controller_launch = OpaqueFunction(
-        function=noisy_controller,
+    noisy_controller_launch = GroupAction(
         condition=IfCondition(use_noisy_odom),
+        actions=[OpaqueFunction(function=noisy_controller)],
     )
 
     return LaunchDescription(
