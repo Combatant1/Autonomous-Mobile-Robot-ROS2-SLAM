@@ -6,6 +6,12 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
+    use_simple_controller_arg = DeclareLaunchArgument(
+        "use_simple_controller",
+        default_value="False",
+        description="Use the custom wheel velocity controller instead of diff_drive_controller",
+    )
+
     use_noisy_odom_arg = DeclareLaunchArgument(
         "use_noisy_odom",
         default_value="False",
@@ -27,7 +33,7 @@ def generate_launch_description():
             "controller.launch.py"
         ),
         launch_arguments={
-            "use_simple_controller": "False",
+            "use_simple_controller": LaunchConfiguration("use_simple_controller"),
             "use_noisy_odom": LaunchConfiguration("use_noisy_odom"),
             "use_sim_time": "True",
         }.items(),
@@ -45,6 +51,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        use_simple_controller_arg,
         use_noisy_odom_arg,
         gazebo,
         controller,
